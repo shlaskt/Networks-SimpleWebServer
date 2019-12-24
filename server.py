@@ -1,7 +1,3 @@
-# search timout for tcp recive socket
-# directory of the files is in workspace/files
-# TODO: understand how read data, when to finish, ("\r\n\r\n")
-# TODO: len
 import socket as sock
 import sys
 import os
