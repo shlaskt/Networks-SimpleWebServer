@@ -1,6 +1,9 @@
 # search timout for tcp recive socket
 # directory of the files is in workspace/files
 # TODO: understand how read data, when to finish, ("\r\n\r\n")
+# TODO: check if after redirection, what to do.
+# TODO: what is the seperator of new line
+# TODO: what is new empty line
 import socket as sock
 import sys
 import os
@@ -9,13 +12,15 @@ DEFAULT_FILE = "index.html"
 DEFAULT_REPRESENTATION = "/"
 CLOSE_CONNECTION = "close"
 KEEP_CONNECTION = "keep-alive"
-REDIRECT = "/redirect"
+REDIRECT = "redirect"
 WORKSPACE = "files"
 VALID_REQUEST = "200 OK"
-INVALID_REQUEST = "404 Not Found"
-REDIRECT_REQUEST = "301 Moved Permanently"
 CONNECTION_SEPERATOR = "Connection: "
-FILE_NOT_FOUND_MSG = "HTTP/1.1 {0}\r\n {1}{2}".format(INVALID_REQUEST, CONNECTION_SEPERATOR, CLOSE_CONNECTION)
+RESULT_FILE_PATH = "/result.html"
+FILE_NOT_FOUND_MSG = "HTTP/1.1 404 Not Found\r\n {0}{1}".format(CONNECTION_SEPERATOR, CLOSE_CONNECTION)
+REDIRECT_MSG = "HTTP/1.1 301 Moved Permanently\r\n {0}{1}\r\nLocation: {2}\r\n\r\n".format(CONNECTION_SEPERATOR,
+                                                                                           CLOSE_CONNECTION,
+                                                                                           RESULT_FILE_PATH)
 
 
 def get_file_name_and_connection(data):
@@ -38,9 +43,15 @@ def is_file_exists(file_path):
 	return os.path.isfile(file_local_path)
 
 
+def send_redirect_msg(socket):
+	socket.send(REDIRECT_MSG.encode())
+
+
 def send_file_not_exists_error(socket):
 	socket.send(FILE_NOT_FOUND_MSG.encode())
-	# TODO: check if need to close the socket.
+
+
+# TODO: check if need to close the socket.
 
 
 def error():
@@ -88,27 +99,18 @@ def add_files_to_client(ip, port, files_list):
 	clients.append(new_client)
 
 
-def add_client(port, files, ip):
-	# port need to be a number
-	if not port.isdigit():
-		return
-	# make list of files
-	files_list = files.split(',')
-
-	# if client exists, add files to it's file, else create new client.
-	for client in clients:
-		if client.ip == ip and client.port == port:
-			client.files += files_list
-			return
-	# if new client
-	new_client = Client(ip, port, files_list)
-	clients.append(new_client)
+def send_file(socket, file_name):
+	pass
 
 
 def handle_client(data, client_socket):
 	file_name, connect_method = get_file_name_and_connection(data)
 	if not is_file_exists(file_name):
 		send_file_not_exists_error(client_socket)
+	elif file_name == REDIRECT:
+		send_redirect_msg(client_socket)
+	else:
+		send_file(client_socket, file_name)
 
 
 def open_tcp_connection(port):
