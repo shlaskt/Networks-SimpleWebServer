@@ -18,14 +18,13 @@ CONNECTION_SEPERATOR = "Connection: "
 FILE_NOT_FOUND_MSG = "HTTP/1.1 {0}\r\n {1}{2}".format(INVALID_REQUEST, CONNECTION_SEPERATOR, CLOSE_CONNECTION)
 
 
-def parse_data(data):
+def get_file_name_and_connection(data):
 	data_parsed = data.split("\r\n")
 	first_row = data_parsed[0]
 	file_name = first_row.split(" ")[1]
 	connect_method = ""
-	# convert to default if neccesery:
-	if file_name == DEFAULT_REPRESENTATION:
-		file_name = DEFAULT_FILE
+	# convert to default if neccesery. o.w remove first '/'
+	file_name = DEFAULT_FILE if file_name == DEFAULT_REPRESENTATION else file_name[1:]
 	for row in data_parsed:
 		if row.startswith(CONNECTION_SEPERATOR):
 			connect_method = row.split(CONNECTION_SEPERATOR)[1]
@@ -106,15 +105,10 @@ def add_client(port, files, ip):
 	clients.append(new_client)
 
 
-def handle_client(client_data, ip, socket):
-	splited_data = client_data.split(" ")
-	if not is_valid_input(splited_data):
-		return
-	choice = int(splited_data[0])
-	if choice == 1:
-		add_client(splited_data[1], splited_data[2], ip)
-	if choice == 2:
-		send_files_list(splited_data[1], socket)
+def handle_client(data, client_socket):
+	file_name, connect_method = get_file_name_and_connection(data)
+	if not is_file_exists(file_name):
+		send_file_not_exists_error(client_socket)
 
 
 def open_tcp_connection(port):
@@ -130,6 +124,7 @@ def open_tcp_connection(port):
 		client_ip = client_address[0]
 		# handle_client(data.decode(), client_ip, client_socket)
 		print(data)
+		handle_client(data, client_socket)
 		client_socket.close()
 		break
 
