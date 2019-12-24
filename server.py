@@ -1,13 +1,12 @@
 # search timout for tcp recive socket
 # directory of the files is in workspace/files
 # TODO: understand how read data, when to finish, ("\r\n\r\n")
-# TODO: check if after redirection, what to do.
-# TODO: what is the seperator of new line
-# TODO: what is new empty line
+# TODO: len
 import socket as sock
 import sys
 import os
 
+EMPTY_LINE = "\r\n\r\n"
 DEFAULT_FILE = "index.html"
 DEFAULT_REPRESENTATION = "/"
 CLOSE_CONNECTION = "close"
@@ -18,9 +17,10 @@ VALID_REQUEST = "200 OK"
 CONNECTION_SEPERATOR = "Connection: "
 RESULT_FILE_PATH = "/result.html"
 FILE_NOT_FOUND_MSG = "HTTP/1.1 404 Not Found\r\n {0}{1}".format(CONNECTION_SEPERATOR, CLOSE_CONNECTION)
+SEND_FILE_MSG = "HTTP/1.1 200 OK\r\n {0}".format(CONNECTION_SEPERATOR)
 REDIRECT_MSG = "HTTP/1.1 301 Moved Permanently\r\n {0}{1}\r\nLocation: {2}\r\n\r\n".format(CONNECTION_SEPERATOR,
-                                                                                           CLOSE_CONNECTION,
-                                                                                           RESULT_FILE_PATH)
+																						   CLOSE_CONNECTION,
+																						   RESULT_FILE_PATH)
 
 
 def get_file_name_and_connection(data):
@@ -51,66 +51,54 @@ def send_file_not_exists_error(socket):
 	socket.send(FILE_NOT_FOUND_MSG.encode())
 
 
-# TODO: check if need to close the socket.
+def filter(string, substr):
+	return any(sub in string for sub in substr)
 
 
-def error():
-	raise TypeError('Error- invalid arguments')
+# check if need to open in binary or in regular read
+def get_read_mode(file_name):
+	list_of_binary_files = [".ico", ".jpg"]
+	if filter(file_name, list_of_binary_files):
+		return "rb"
+	return 'r'
 
 
-def is_valid_input(splited_data):
-	list_length = len(splited_data)
-	if list_length < 2:
-		return False
-	choice = splited_data[0]
-	if choice not in ['1', '2']:
-		return False
-	choice = int(choice)
-	if choice == 1 and list_length != 3:
-		return False
-	if choice == 2 and list_length != 2:
-		return False
-	return True
-
-
-def search_files_contains(substring_to_find):
-	files_msg = ""
-	for client in clients:
-		for file in client.files:
-			if substring_to_find in file:
-				files_msg += "{0} {1} {2},".format(file, client.ip, str(client.port))
-	if files_msg:
-		files_msg = files_msg[:-1] + '\n'  # remove the last ',' and add '\n
-	return files_msg
-
-
-def send_files_list(file_name, socket):
-	files_msg = search_files_contains(file_name)
-	socket.send(files_msg.encode())
-
-
-def add_files_to_client(ip, port, files_list):
-	for client in clients:
-		if client.ip == ip and client.port == port:
-			client.files += files_list
-			return
-	# if new client
-	new_client = Client(ip, port, files_list)
-	clients.append(new_client)
-
-
-def send_file(socket, file_name):
-	pass
+def send_file(socket, file_name, connection_method):
+	# local search is from WORKSPACE = files
+	mode = get_read_mode(file_name)
+	file_local_path = os.path.join(WORKSPACE, file_name)
+	with open(file_local_path, mode) as fin:
+		file_content = fin.read()
+		# len(file_content)
+		msg = "{0}{1}\r\n Content-Length: {2}\r\n\r\n".format(SEND_FILE_MSG, connection_method,
+					os.path.getsize(file_local_path))
+	msg = msg.encode()
+	msg += file_content if mode == "rb" else file_content.encode()
+	socket.send(msg)
 
 
 def handle_client(data, client_socket):
+	# if you got no data - do nothing and close connection
+	close_connection = True
+	if not data:
+		return close_connection
+	# print the data from client
+	print(data)
+
 	file_name, connect_method = get_file_name_and_connection(data)
-	if not is_file_exists(file_name):
-		send_file_not_exists_error(client_socket)
-	elif file_name == REDIRECT:
+	# first check for redirect (because there is no file called like this)
+	if file_name == REDIRECT:
 		send_redirect_msg(client_socket)
+		close_connection = True
+	# if file not exists - send 404
+	elif not is_file_exists(file_name):
+		send_file_not_exists_error(client_socket)
+		close_connection = True
+	# else - there is a file with this name, sent it to client
 	else:
-		send_file(client_socket, file_name)
+		send_file(client_socket, file_name, connect_method)
+		close_connection = False if connect_method == KEEP_CONNECTION else True
+	return close_connection
 
 
 def open_tcp_connection(port):
@@ -120,15 +108,27 @@ def open_tcp_connection(port):
 	server_port = int(port)
 	server.bind((server_ip, server_port))
 	server.listen()  # unlimited number of clients, will close connection via timeout or client request
-	while True:
+
+	while True:  # iteration for every client
 		client_socket, client_address = server.accept()
-		data = client_socket.recv(2500).decode()
-		client_ip = client_address[0]
-		# handle_client(data.decode(), client_ip, client_socket)
-		print(data)
-		handle_client(data, client_socket)
-		client_socket.close()
-		break
+		client_socket.settimeout(1.0)
+		while True:  # get one client commands until break
+			try:
+				data = ""
+				while not data.endswith(EMPTY_LINE):  # get data until empty line
+					data += client_socket.recv(1024).decode()
+			except sock.timeout as e:
+				# print(e)
+				client_socket.close()
+				break
+			close_connection = handle_client(data, client_socket)
+			if close_connection:
+				client_socket.close()
+				break
+
+
+def error():
+	raise TypeError('Error- invalid arguments')
 
 
 if __name__ == '__main__':
