@@ -1,30 +1,47 @@
-DEAFULT_FILE = "index.html"
-CLOSE_CONNECTION = "close"
-KEEP_CONNECTION = "keep-alive"
-REDIRECT = "/redirect"
-WORKSPACE = "./files"
-VALID_REQUEST = "200 OK"
-INVALID_REQUEST = "404 Not Found"
-REDIRECT_REQUEST = "301 Moved Permanently"
-
 # search timout for tcp recive socket
 # directory of the files is in workspace/files
-
+# TODO: understand how read data, when to finish, ("\r\n\r\n")
 import socket as sock
 import sys
 import os
 
-clients = []
+DEFAULT_FILE = "index.html"
+DEFAULT_REPRESENTATION = "/"
+CLOSE_CONNECTION = "close"
+KEEP_CONNECTION = "keep-alive"
+REDIRECT = "/redirect"
+WORKSPACE = "files"
+VALID_REQUEST = "200 OK"
+INVALID_REQUEST = "404 Not Found"
+REDIRECT_REQUEST = "301 Moved Permanently"
+CONNECTION_SEPERATOR = "Connection: "
+FILE_NOT_FOUND_MSG = "HTTP/1.1 {0}\r\n {1}{2}".format(INVALID_REQUEST, CONNECTION_SEPERATOR, CLOSE_CONNECTION)
 
 
-class Client:
-	def __init__(self, ip, port, files):
-		self.ip = ip
-		self.port = port
-		self.files = files
+def parse_data(data):
+	data_parsed = data.split("\r\n")
+	first_row = data_parsed[0]
+	file_name = first_row.split(" ")[1]
+	connect_method = ""
+	# convert to default if neccesery:
+	if file_name == DEFAULT_REPRESENTATION:
+		file_name = DEFAULT_FILE
+	for row in data_parsed:
+		if row.startswith(CONNECTION_SEPERATOR):
+			connect_method = row.split(CONNECTION_SEPERATOR)[1]
+			break
+	return file_name, connect_method
 
-	def __str__(self):
-		return str(self.files)
+
+def is_file_exists(file_path):
+	# local search is from WORKSPACE = files
+	file_local_path = os.path.join(WORKSPACE, file_path)
+	return os.path.isfile(file_local_path)
+
+
+def send_file_not_exists_error(socket):
+	socket.send(FILE_NOT_FOUND_MSG.encode())
+	# TODO: check if need to close the socket.
 
 
 def error():
@@ -103,13 +120,13 @@ def handle_client(client_data, ip, socket):
 def open_tcp_connection(port):
 	# open tcp connection
 	server = sock.socket(sock.AF_INET, sock.SOCK_STREAM)
-	server_ip = '127.0.0.1'
+	server_ip = '0.0.0.0'
 	server_port = int(port)
 	server.bind((server_ip, server_port))
 	server.listen()  # unlimited number of clients, will close connection via timeout or client request
 	while True:
 		client_socket, client_address = server.accept()
-		data = client_socket.recv(10240).decode()
+		data = client_socket.recv(2500).decode()
 		client_ip = client_address[0]
 		# handle_client(data.decode(), client_ip, client_socket)
 		print(data)
