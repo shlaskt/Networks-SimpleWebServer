@@ -1,4 +1,4 @@
-# Networks_ex3
+# Networks-SimpleWebServer
 Web server . 
 In that task we implemented a TCP server that functions as follows:  
 The client sends a file name to the server that he wants to download (aka, the server sends it back).  
