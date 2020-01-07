@@ -1,5 +1,4 @@
-# Networks-SimpleWebServer
-Web server . 
+# Networks-SimpleWebServer   
 In that task we implemented a TCP server that functions as follows:  
 The client sends a file name to the server that he wants to download (aka, the server sends it back).  
 If the file name also contains a folder path, the server looks for the file according to the path within the files folder.  
